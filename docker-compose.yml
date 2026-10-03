@@ -80,6 +80,18 @@ services:
     tmpfs: [/tmp]
     security_opt: [no-new-privileges:true]
 
+  soar:
+    build: {context: ./soar}
+    container_name: ai-siem-soar
+    restart: unless-stopped
+    environment:
+      SHUFFLE_WEBHOOK_URL: ${SHUFFLE_WEBHOOK_URL:-}
+      SOAR_TIMEOUT_SECONDS: 15
+    networks: [pipeline_net, soar_bridge]
+    read_only: true
+    tmpfs: [/tmp]
+    security_opt: [no-new-privileges:true]
+
   policy-engine:
     build: {context: ./policy-engine}
     container_name: ai-siem-policy
