@@ -1,0 +1,2 @@
+2026-10-03 19:31:22 FW-A7 [ALM-8831] peer=45.13.22.91 target=10.20.1.15 svc=ssh result=reject attempts=17
+2026-10-03 19:31:25 FW-A7 [ALM-8831] peer=45.13.22.92 target=10.20.1.15 svc=ssh result=reject attempts=21
