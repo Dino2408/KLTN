@@ -20,5 +20,5 @@ def detect(s: Signal):
         "severity": severity,
         "source_ip": s.source_ip,
         "evidence_count": s.event_count,
-        "confidence": min(0.99, 0.70 + s.event_count / 100)
+        "confidence": min(0.99, 0.90 + max(0, s.event_count - 5) / 100)
     }
