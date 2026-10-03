@@ -87,6 +87,7 @@ services:
     environment:
       SHUFFLE_WEBHOOK_URL: ${SHUFFLE_WEBHOOK_URL:-}
       SOAR_TIMEOUT_SECONDS: 15
+      SOAR_DRY_RUN: ${SOAR_DRY_RUN:-true}
     networks: [pipeline_net, soar_bridge]
     read_only: true
     tmpfs: [/tmp]
@@ -136,6 +137,9 @@ services:
       ENRICHMENT_URL: http://enrichment:8000
       CORRELATION_URL: http://correlation:8000
       DETECTION_URL: http://detection:8000
+      AI_ANALYSIS_URL: http://ai-analysis:8094
+      POLICY_URL: http://policy-engine:8000
+      SOAR_URL: http://soar:8095
       AUDIT_URL: http://audit:8000
     ports: ["8093:8093"]
     depends_on:
@@ -145,6 +149,11 @@ services:
       normalization: {condition: service_started}
       parser-validator: {condition: service_started}
       enrichment: {condition: service_started}
+      correlation: {condition: service_started}
+      detection: {condition: service_started}
+      ai-analysis: {condition: service_started}
+      policy-engine: {condition: service_started}
+      soar: {condition: service_started}
       audit: {condition: service_started}
     networks: [pipeline_net]
     read_only: true
