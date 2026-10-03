@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Universal Normalized Security Event",
+  "type": "object",
+  "required": ["@timestamp", "event"],
+  "properties": {
+    "@timestamp": {"type": "string", "format": "date-time"},
+    "event": {
+      "type": "object",
+      "required": ["original"],
+      "properties": {
+        "id": {"type": "string"},
+        "kind": {"type": "string"},
+        "category": {"type": "array", "items": {"type": "string"}},
+        "type": {"type": "array", "items": {"type": "string"}},
+        "action": {"type": "string"},
+        "outcome": {"type": "string"},
+        "original": {"type": "string"}
+      },
+      "additionalProperties": true
+    },
+    "source": {"type": "object", "additionalProperties": true},
+    "destination": {"type": "object", "additionalProperties": true},
+    "observer": {"type": "object", "additionalProperties": true},
+    "rule": {"type": "object", "additionalProperties": true},
+    "labels": {"type": "object", "additionalProperties": true},
+    "ai_siem": {"type": "object", "additionalProperties": true}
+  },
+  "additionalProperties": true
+}

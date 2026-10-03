@@ -1,0 +1,277 @@
+name: ai-siem-soar
+
+services:
+  event-bus:
+    image: redis:7-alpine
+    container_name: ai-siem-event-bus
+    restart: unless-stopped
+    command: ["redis-server","--appendonly","yes","--save","60","1000"]
+    volumes:
+      - event_bus_data:/data
+    healthcheck:
+      test: ["CMD","redis-cli","ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks: [pipeline_net]
+
+  ingestion:
+    build: {context: ./ingestion}
+    container_name: ai-siem-ingestion
+    restart: unless-stopped
+    environment:
+      REDIS_URL: redis://event-bus:6379/0
+      EVENT_STREAM: siem:events
+      INPUT_DIR: /var/log/ingest
+      SYSLOG_TCP_PORT: 5514
+      SYSLOG_UDP_PORT: 5514
+    ports:
+      - "8000:8000"
+      - "5514:5514/tcp"
+      - "5514:5514/udp"
+    volumes:
+      - ./data/ingest:/var/log/ingest:rw
+    depends_on:
+      event-bus: {condition: service_healthy}
+    networks: [pipeline_net]
+    read_only: true
+    tmpfs: [/tmp]
+    security_opt: [no-new-privileges:true]
+
+  template-engine:
+    build: {context: ./template-engine}
+    container_name: ai-siem-template-engine
+    restart: unless-stopped
+    networks: [pipeline_net]
+    read_only: true
+    tmpfs: [/tmp]
+    security_opt: [no-new-privileges:true]
+
+  enrichment:
+    build: {context: ./enrichment}
+    container_name: ai-siem-enrichment
+    restart: unless-stopped
+    networks: [pipeline_net]
+    read_only: true
+    tmpfs: [/tmp]
+    security_opt: [no-new-privileges:true]
+
+  correlation:
+    build: {context: ./correlation}
+    container_name: ai-siem-correlation
+    environment:
+      REDIS_URL: redis://event-bus:6379/0
+      CORRELATION_WINDOW_SECONDS: 300
+      REPEATED_SOURCE_THRESHOLD: 5
+    depends_on:
+      event-bus: {condition: service_healthy}
+    restart: unless-stopped
+    networks: [pipeline_net]
+    read_only: true
+    tmpfs: [/tmp]
+    security_opt: [no-new-privileges:true]
+
+  detection:
+    build: {context: ./detection}
+    container_name: ai-siem-detection
+    restart: unless-stopped
+    networks: [pipeline_net]
+    read_only: true
+    tmpfs: [/tmp]
+    security_opt: [no-new-privileges:true]
+
+  soar:
+    build: {context: ./soar}
+    container_name: ai-siem-soar
+    restart: unless-stopped
+    environment:
+      SHUFFLE_WEBHOOK_URL: ${SHUFFLE_WEBHOOK_URL:-}
+      SOAR_TIMEOUT_SECONDS: 15
+      SOAR_DRY_RUN: ${SOAR_DRY_RUN:-true}
+    networks: [pipeline_net, soar_bridge]
+    read_only: true
+    tmpfs: [/tmp]
+    security_opt: [no-new-privileges:true]
+
+  policy-engine:
+    build: {context: ./policy-engine}
+    container_name: ai-siem-policy
+    environment:
+      REDIS_URL: redis://event-bus:6379/0
+      MIN_AUTOMATION_CONFIDENCE: 0.90
+      ACTION_RATE_LIMIT: 20
+      ACTION_RATE_WINDOW_SECONDS: 300
+    depends_on:
+      event-bus: {condition: service_healthy}
+    restart: unless-stopped
+    networks: [pipeline_net]
+    read_only: true
+    tmpfs: [/tmp]
+    security_opt: [no-new-privileges:true]
+
+  audit:
+    build: {context: ./audit}
+    container_name: ai-siem-audit
+    restart: unless-stopped
+    volumes:
+      - ./data/audit:/app/audit:rw
+    networks: [pipeline_net]
+    read_only: true
+    tmpfs: [/tmp]
+    security_opt: [no-new-privileges:true]
+
+  pipeline-api:
+    build: {context: ./pipeline-api}
+    container_name: ai-siem-pipeline-api
+    restart: unless-stopped
+    environment:
+      REDIS_URL: redis://event-bus:6379/0
+      EVENT_STREAM: siem:events
+      CONSUMER_GROUP: pipeline
+      CONSUMER_NAME: pipeline-1
+      DLQ_STREAM: siem:dlq
+      PARSER_URL: http://parser-engine:8000
+      AI_PARSER_URL: http://ai-parser:8090
+      NORMALIZER_URL: http://normalization:8091
+      VALIDATOR_URL: http://parser-validator:8092
+      ENRICHMENT_URL: http://enrichment:8000
+      CORRELATION_URL: http://correlation:8000
+      DETECTION_URL: http://detection:8000
+      AI_ANALYSIS_URL: http://ai-analysis:8094
+      POLICY_URL: http://policy-engine:8000
+      SOAR_URL: http://soar:8095
+      AUDIT_URL: http://audit:8000
+    ports: ["8093:8093"]
+    depends_on:
+      event-bus: {condition: service_healthy}
+      parser-engine: {condition: service_started}
+      ai-parser: {condition: service_started}
+      normalization: {condition: service_started}
+      parser-validator: {condition: service_started}
+      enrichment: {condition: service_started}
+      correlation: {condition: service_started}
+      detection: {condition: service_started}
+      ai-analysis: {condition: service_started}
+      policy-engine: {condition: service_started}
+      soar: {condition: service_started}
+      audit: {condition: service_started}
+    networks: [pipeline_net]
+    read_only: true
+    tmpfs: [/tmp]
+    security_opt: [no-new-privileges:true]
+
+  parser-validator:
+    build: {context: ./parser-validator}
+    container_name: ai-siem-parser-validator
+    restart: unless-stopped
+    environment:
+      ACTIVE_DIR: /app/active
+      CANDIDATE_DIR: /app/candidates
+      PARSER_VALIDATION_THRESHOLD: ${PARSER_VALIDATION_THRESHOLD:-0.95}
+    volumes:
+      - ./parsers/active:/app/active:rw
+      - ./parsers/candidates:/app/candidates:rw
+    networks: [pipeline_net]
+    read_only: true
+    tmpfs: [/tmp]
+    security_opt: [no-new-privileges:true]
+
+  parser-engine:
+    build:
+      context: ./parser-engine
+    container_name: ai-siem-parser-engine
+    restart: unless-stopped
+    volumes:
+      - ./parsers/active:/app/parsers:rw
+    networks: [pipeline_net]
+    read_only: true
+    tmpfs: [/tmp]
+    security_opt: [no-new-privileges:true]
+
+  ai-parser:
+    build:
+      context: ./ai-parser
+    container_name: ai-siem-ai-parser
+    restart: unless-stopped
+    environment:
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434}
+      AI_MODEL: ${AI_MODEL:-qwen2.5-coder:7b}
+      PARSER_DIR: /app/parsers
+    volumes:
+      - ./parsers/candidates:/app/parsers:rw
+    depends_on:
+      ollama:
+        condition: service_started
+    networks: [pipeline_net]
+    read_only: true
+    tmpfs: [/tmp]
+    security_opt: [no-new-privileges:true]
+
+  normalization:
+    build:
+      context: ./normalization
+    container_name: ai-siem-normalization
+    restart: unless-stopped
+    networks: [pipeline_net]
+    read_only: true
+    tmpfs: [/tmp]
+    security_opt: [no-new-privileges:true]
+
+  ai-analysis:
+    build: {context: ./ai-analysis}
+    container_name: ai-siem-ai-analysis
+    restart: unless-stopped
+    environment:
+      OLLAMA_BASE_URL: http://ollama:11434
+      AI_MODEL: ${AI_MODEL:-qwen2.5-coder:7b}
+    depends_on:
+      ollama: {condition: service_started}
+    networks: [pipeline_net]
+    read_only: true
+    tmpfs: [/tmp]
+    security_opt: [no-new-privileges:true]
+
+  ai-gateway:
+    build:
+      context: ./ai-gateway
+    container_name: ai-siem-ai-gateway
+    restart: unless-stopped
+    environment:
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434}
+      AI_MODEL: ${AI_MODEL:-qwen2.5-coder:7b}
+      AI_MAX_EVENTS: ${AI_MAX_EVENTS:-50}
+      AI_CONFIDENCE_THRESHOLD: ${AI_CONFIDENCE_THRESHOLD:-0.90}
+      SHUFFLE_WEBHOOK_URL: ${SHUFFLE_WEBHOOK_URL:-}
+    ports:
+      - "${AI_GATEWAY_PORT:-8080}:8080"
+    depends_on:
+      ollama:
+        condition: service_started
+    networks: [pipeline_net, soar_bridge]
+    read_only: true
+    tmpfs: [/tmp]
+    security_opt: [no-new-privileges:true]
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ai-siem-ollama
+    restart: unless-stopped
+    volumes:
+      - ollama_data:/root/.ollama
+    ports:
+      - "127.0.0.1:${OLLAMA_PORT:-11434}:11434"
+    networks: [pipeline_net]
+    security_opt: [no-new-privileges:true]
+    gpus: all
+
+networks:
+  pipeline_net:
+    driver: bridge
+    internal: true
+  soar_bridge:
+    driver: bridge
+    internal: true
+
+volumes:
+  ollama_data:
+  event_bus_data:
