@@ -59,6 +59,12 @@ services:
   correlation:
     build: {context: ./correlation}
     container_name: ai-siem-correlation
+    environment:
+      REDIS_URL: redis://event-bus:6379/0
+      CORRELATION_WINDOW_SECONDS: 300
+      REPEATED_SOURCE_THRESHOLD: 5
+    depends_on:
+      event-bus: {condition: service_healthy}
     restart: unless-stopped
     networks: [pipeline_net]
     read_only: true
@@ -77,6 +83,13 @@ services:
   policy-engine:
     build: {context: ./policy-engine}
     container_name: ai-siem-policy
+    environment:
+      REDIS_URL: redis://event-bus:6379/0
+      MIN_AUTOMATION_CONFIDENCE: 0.90
+      ACTION_RATE_LIMIT: 20
+      ACTION_RATE_WINDOW_SECONDS: 300
+    depends_on:
+      event-bus: {condition: service_healthy}
     restart: unless-stopped
     networks: [pipeline_net]
     read_only: true
