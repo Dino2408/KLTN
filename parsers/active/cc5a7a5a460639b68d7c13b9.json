@@ -1,0 +1,16 @@
+{
+  "parser_id": "builtin-unknown-firewall-demo",
+  "version": "1.0.0",
+  "format": "custom_kv",
+  "fingerprint": "cc5a7a5a460639b68d7c13b9",
+  "fields": [
+    {"source":"regex:^(\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2})","target":"timestamp","type":"datetime","required":true},
+    {"source":"kv:peer","target":"source.ip","type":"ip","required":true},
+    {"source":"kv:target","target":"destination.ip","type":"ip","required":true},
+    {"source":"kv:svc","target":"network.application","type":"string","required":false},
+    {"source":"kv:result","target":"event.outcome","type":"string","required":true},
+    {"source":"kv:attempts","target":"attempt_count","type":"integer","required":false}
+  ],
+  "confidence": 1.0,
+  "status": "validated"
+}
