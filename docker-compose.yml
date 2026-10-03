@@ -1,6 +1,72 @@
 name: ai-siem-soar
 
 services:
+  ingestion:
+    build: {context: ./ingestion}
+    container_name: ai-siem-ingestion
+    restart: unless-stopped
+    ports: ["8000:8000"]
+    networks: [pipeline_net]
+    read_only: true
+    tmpfs: [/tmp]
+    security_opt: [no-new-privileges:true]
+
+  template-engine:
+    build: {context: ./template-engine}
+    container_name: ai-siem-template-engine
+    restart: unless-stopped
+    networks: [pipeline_net]
+    read_only: true
+    tmpfs: [/tmp]
+    security_opt: [no-new-privileges:true]
+
+  enrichment:
+    build: {context: ./enrichment}
+    container_name: ai-siem-enrichment
+    restart: unless-stopped
+    networks: [pipeline_net]
+    read_only: true
+    tmpfs: [/tmp]
+    security_opt: [no-new-privileges:true]
+
+  correlation:
+    build: {context: ./correlation}
+    container_name: ai-siem-correlation
+    restart: unless-stopped
+    networks: [pipeline_net]
+    read_only: true
+    tmpfs: [/tmp]
+    security_opt: [no-new-privileges:true]
+
+  detection:
+    build: {context: ./detection}
+    container_name: ai-siem-detection
+    restart: unless-stopped
+    networks: [pipeline_net]
+    read_only: true
+    tmpfs: [/tmp]
+    security_opt: [no-new-privileges:true]
+
+  policy-engine:
+    build: {context: ./policy-engine}
+    container_name: ai-siem-policy
+    restart: unless-stopped
+    networks: [pipeline_net]
+    read_only: true
+    tmpfs: [/tmp]
+    security_opt: [no-new-privileges:true]
+
+  audit:
+    build: {context: ./audit}
+    container_name: ai-siem-audit
+    restart: unless-stopped
+    volumes:
+      - ./data/audit:/app/audit:rw
+    networks: [pipeline_net]
+    read_only: true
+    tmpfs: [/tmp]
+    security_opt: [no-new-privileges:true]
+
   pipeline-api:
     build: {context: ./pipeline-api}
     container_name: ai-siem-pipeline-api
