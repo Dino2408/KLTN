@@ -1,6 +1,38 @@
 name: ai-siem-soar
 
 services:
+  pipeline-api:
+    build: {context: ./pipeline-api}
+    container_name: ai-siem-pipeline-api
+    restart: unless-stopped
+    environment:
+      PARSER_URL: http://parser-engine:8000
+      AI_PARSER_URL: http://ai-parser:8090
+      NORMALIZER_URL: http://normalization:8091
+      VALIDATOR_URL: http://parser-validator:8092
+    ports: ["8093:8093"]
+    depends_on: [parser-engine, ai-parser, normalization, parser-validator]
+    networks: [pipeline_net]
+    read_only: true
+    tmpfs: [/tmp]
+    security_opt: [no-new-privileges:true]
+
+  parser-validator:
+    build: {context: ./parser-validator}
+    container_name: ai-siem-parser-validator
+    restart: unless-stopped
+    environment:
+      ACTIVE_DIR: /app/active
+      CANDIDATE_DIR: /app/candidates
+      PARSER_VALIDATION_THRESHOLD: ${PARSER_VALIDATION_THRESHOLD:-0.95}
+    volumes:
+      - ./parsers/active:/app/active:rw
+      - ./parsers/candidates:/app/candidates:rw
+    networks: [pipeline_net]
+    read_only: true
+    tmpfs: [/tmp]
+    security_opt: [no-new-privileges:true]
+
   parser-engine:
     build:
       context: ./parser-engine
