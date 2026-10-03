@@ -89,3 +89,14 @@ async def replay(limit:int=100):
         await rdb.xadd(EVENT_STREAM,{"payload":fields.get("payload","{}")},maxlen=100000,approximate=True)
         await rdb.xdel(DLQ_STREAM,msg_id); replayed+=1
     return {"replayed":replayed,"remaining_dlq":await rdb.xlen(DLQ_STREAM)}
+
+
+@api.post("/v1/correlate")
+async def correlate(events: list[dict]):
+    async with httpx.AsyncClient(timeout=120) as client:
+        return (await client.post(os.getenv("CORRELATION_URL","http://correlation:8000") + "/v1/correlate", json={"events":events})).json()
+
+@api.post("/v1/detect")
+async def detect(signal: dict):
+    async with httpx.AsyncClient(timeout=120) as client:
+        return (await client.post(os.getenv("DETECTION_URL","http://detection:8000") + "/v1/detect", json=signal)).json()
