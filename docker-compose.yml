@@ -1,6 +1,47 @@
 name: ai-siem-soar
 
 services:
+  parser-engine:
+    build:
+      context: ./parser-engine
+    container_name: ai-siem-parser-engine
+    restart: unless-stopped
+    volumes:
+      - ./parsers/active:/app/parsers:rw
+    networks: [pipeline_net]
+    read_only: true
+    tmpfs: [/tmp]
+    security_opt: [no-new-privileges:true]
+
+  ai-parser:
+    build:
+      context: ./ai-parser
+    container_name: ai-siem-ai-parser
+    restart: unless-stopped
+    environment:
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434}
+      AI_MODEL: ${AI_MODEL:-qwen2.5-coder:7b}
+      PARSER_DIR: /app/parsers
+    volumes:
+      - ./parsers/candidates:/app/parsers:rw
+    depends_on:
+      ollama:
+        condition: service_started
+    networks: [pipeline_net]
+    read_only: true
+    tmpfs: [/tmp]
+    security_opt: [no-new-privileges:true]
+
+  normalization:
+    build:
+      context: ./normalization
+    container_name: ai-siem-normalization
+    restart: unless-stopped
+    networks: [pipeline_net]
+    read_only: true
+    tmpfs: [/tmp]
+    security_opt: [no-new-privileges:true]
+
   ai-gateway:
     build:
       context: ./ai-gateway
@@ -17,14 +58,10 @@ services:
     depends_on:
       ollama:
         condition: service_started
-    networks:
-      - ai_net
-      - soar_bridge
+    networks: [pipeline_net, soar_bridge]
     read_only: true
-    tmpfs:
-      - /tmp
-    security_opt:
-      - no-new-privileges:true
+    tmpfs: [/tmp]
+    security_opt: [no-new-privileges:true]
 
   ollama:
     image: ollama/ollama:latest
@@ -34,39 +71,17 @@ services:
       - ollama_data:/root/.ollama
     ports:
       - "127.0.0.1:${OLLAMA_PORT:-11434}:11434"
-    networks:
-      - ai_net
-    security_opt:
-      - no-new-privileges:true
+    networks: [pipeline_net]
+    security_opt: [no-new-privileges:true]
     gpus: all
 
-  suricata:
-    image: jasonish/suricata:latest
-    container_name: ai-siem-suricata
-    restart: unless-stopped
-    command: ["suricata", "-i", "eth0", "-l", "/var/log/suricata"]
-    cap_add:
-      - NET_ADMIN
-      - NET_RAW
-      - SYS_NICE
-    volumes:
-      - ./suricata/suricata.yaml:/etc/suricata/suricata.yaml:ro
-      - ./suricata/rules:/var/lib/suricata/rules:ro
-      - ./data/suricata:/var/log/suricata
-    networks:
-      - siem_ingest
-    profiles:
-      - network
-
 networks:
-  ai_net:
+  pipeline_net:
     driver: bridge
     internal: true
   soar_bridge:
     driver: bridge
     internal: true
-  siem_ingest:
-    driver: bridge
 
 volumes:
   ollama_data:
