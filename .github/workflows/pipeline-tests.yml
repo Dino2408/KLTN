@@ -12,3 +12,11 @@ jobs:
           python-version: "3.12"
       - run: pip install -r parser-engine/requirements.txt pytest
       - run: pytest -q tests/parser
+      - run: python -m compileall -q ingestion pipeline-api parser-engine ai-parser parser-validator normalization template-engine enrichment correlation detection policy-engine audit
+
+  compose-validation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate Compose configuration
+        run: docker compose config -q
