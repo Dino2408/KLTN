@@ -76,8 +76,20 @@ services:
       AI_PARSER_URL: http://ai-parser:8090
       NORMALIZER_URL: http://normalization:8091
       VALIDATOR_URL: http://parser-validator:8092
+      ENRICHMENT_URL: http://enrichment:8000
+      CORRELATION_URL: http://correlation:8000
+      DETECTION_URL: http://detection:8000
+      AUDIT_URL: http://audit:8000
     ports: ["8093:8093"]
-    depends_on: [parser-engine, ai-parser, normalization, parser-validator]
+    depends_on:
+      parser-engine: {condition: service_started}
+      ai-parser: {condition: service_started}
+      normalization: {condition: service_started}
+      parser-validator: {condition: service_started}
+      enrichment: {condition: service_started}
+      correlation: {condition: service_started}
+      detection: {condition: service_started}
+      audit: {condition: service_started}
     networks: [pipeline_net]
     read_only: true
     tmpfs: [/tmp]
