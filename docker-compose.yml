@@ -1,11 +1,38 @@
 name: ai-siem-soar
 
 services:
+  event-bus:
+    image: redis:7-alpine
+    container_name: ai-siem-event-bus
+    restart: unless-stopped
+    command: ["redis-server","--appendonly","yes","--save","60","1000"]
+    volumes:
+      - event_bus_data:/data
+    healthcheck:
+      test: ["CMD","redis-cli","ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks: [pipeline_net]
+
   ingestion:
     build: {context: ./ingestion}
     container_name: ai-siem-ingestion
     restart: unless-stopped
-    ports: ["8000:8000"]
+    environment:
+      REDIS_URL: redis://event-bus:6379/0
+      EVENT_STREAM: siem:events
+      INPUT_DIR: /var/log/ingest
+      SYSLOG_TCP_PORT: 5514
+      SYSLOG_UDP_PORT: 5514
+    ports:
+      - "8000:8000"
+      - "5514:5514/tcp"
+      - "5514:5514/udp"
+    volumes:
+      - ./data/ingest:/var/log/ingest:rw
+    depends_on:
+      event-bus: {condition: service_healthy}
     networks: [pipeline_net]
     read_only: true
     tmpfs: [/tmp]
@@ -72,6 +99,11 @@ services:
     container_name: ai-siem-pipeline-api
     restart: unless-stopped
     environment:
+      REDIS_URL: redis://event-bus:6379/0
+      EVENT_STREAM: siem:events
+      CONSUMER_GROUP: pipeline
+      CONSUMER_NAME: pipeline-1
+      DLQ_STREAM: siem:dlq
       PARSER_URL: http://parser-engine:8000
       AI_PARSER_URL: http://ai-parser:8090
       NORMALIZER_URL: http://normalization:8091
@@ -82,13 +114,12 @@ services:
       AUDIT_URL: http://audit:8000
     ports: ["8093:8093"]
     depends_on:
+      event-bus: {condition: service_healthy}
       parser-engine: {condition: service_started}
       ai-parser: {condition: service_started}
       normalization: {condition: service_started}
       parser-validator: {condition: service_started}
       enrichment: {condition: service_started}
-      correlation: {condition: service_started}
-      detection: {condition: service_started}
       audit: {condition: service_started}
     networks: [pipeline_net]
     read_only: true
@@ -195,3 +226,4 @@ networks:
 
 volumes:
   ollama_data:
+  event_bus_data:
