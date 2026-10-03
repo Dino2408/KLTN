@@ -20,7 +20,7 @@ def parse_sample(raw: str, spec: dict):
         m = None
         if source.startswith("kv:"):
             key = re.escape(source[3:])
-            m = re.search(rf"\\b{key}=([^\\s]+)", raw)
+            m = re.search(rf"\b{key}=([^\s]+)", raw)
         elif source.startswith("regex:"):
             m = re.search(source[6:], raw)
         if not m:
