@@ -1,29 +1,29 @@
 import os, json
 from pathlib import Path
-import httpx
+from fastapi import FastAPI
+from pydantic import BaseModel, Field
+from app import generate
 from parser_engine_compat import fingerprint
 
-OLLAMA = os.getenv("OLLAMA_BASE_URL", "http://ollama:11434")
-MODEL = os.getenv("AI_MODEL", "qwen2.5-coder:7b")
+api = FastAPI(title="AI Adaptive Parser", version="0.1.0")
 PARSER_DIR = Path(os.getenv("PARSER_DIR", "/app/parsers"))
 
-SYSTEM = """You are an adaptive security-log parser generator.
-Return ONLY JSON matching:
-{"format": "...", "fields":[{"source":"kv:key|regex:(capture regex)","target":"ECS path","type":"string|integer|float|boolean|ip|datetime","required":false}]}
-Never invent values. Infer mappings only from the supplied examples. Prefer kv: sources when the log is key=value.
-"""
+class GenerateRequest(BaseModel):
+    examples: list[str] = Field(min_length=1, max_length=100)
 
-async def generate(examples: list[str]) -> dict:
-    prompt = SYSTEM + "\nExamples:\n" + "\n".join(examples)
-    async with httpx.AsyncClient(timeout=120) as client:
-        r = await client.post(f"{OLLAMA}/api/chat", json={
-            "model": MODEL,
-            "messages":[{"role":"system","content":SYSTEM},{"role":"user","content":prompt}],
-            "stream":False, "format":"json",
-            "options":{"temperature":0}
-        })
-        r.raise_for_status()
-        return json.loads(r.json()["message"]["content"])
+@api.get("/health")
+def health():
+    return {"status": "ok", "service": "ai-parser"}
 
-def parser_path(fp: str) -> Path:
-    return PARSER_DIR / f"{fp}.json"
+@api.post("/v1/generate")
+async def generate_parser(req: GenerateRequest):
+    fp = fingerprint(req.examples[0])
+    candidate = await generate(req.examples)
+    candidate.update({
+        "parser_id": f"ai-{fp}",
+        "fingerprint": fp,
+        "version": "0.1.0",
+        "confidence": 0.0,
+        "status": "candidate"
+    })
+    return candidate
